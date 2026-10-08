@@ -7,7 +7,6 @@ import { DashboardView } from './views/DashboardView';
 import { NoticesView } from './views/NoticesView';
 import { NoticeDetailView } from './views/NoticeDetailView';
 import { TimetableView } from './views/SecondaryViews';
-import { AdminLoginView } from './views/AdminLoginView';
 import { matchesNavCategory } from './types/notice';
 import type { Notice, ActionItem } from './types/notice';
 import { StudentApiService } from './services/studentApi';
@@ -114,9 +113,6 @@ export const App: React.FC = () => {
     if (!rawHash || rawHash === 'dashboard' || rawHash === 'notices/all' || rawHash === 'notices') {
       return { view: 'dashboard', category: 'all', noticeId: undefined, targetAudience: '' };
     }
-    if (rawHash === 'admin-login' || rawHash === 'admin' || rawHash === 'login') {
-      return { view: 'admin-login', category: 'all', noticeId: undefined, targetAudience: '' };
-    }
     if (rawHash.startsWith('target-audience/')) {
       const audience = decodeURIComponent(rawHash.replace('target-audience/', ''));
       if (
@@ -153,6 +149,12 @@ export const App: React.FC = () => {
   // Sync state with URL hash
   useEffect(() => {
     const handleHashChange = () => {
+      const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (rawHash === 'admin-login' || rawHash === 'admin' || rawHash === 'login') {
+        window.location.replace(getAdminPortalUrl());
+        return;
+      }
+
       const route = parseRoute();
       setCurrentView(route.view);
       if (route.category) {
@@ -263,14 +265,6 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  if (currentView === 'admin-login') {
-    return (
-      <AdminLoginView
-        onBackToStudentPortal={() => navigateTo('dashboard')}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#1c1b1b] flex flex-col selection:bg-[#003c84] selection:text-white overflow-x-hidden">
