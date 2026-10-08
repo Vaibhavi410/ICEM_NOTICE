@@ -42,7 +42,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
       const targetPort = port === '5174' ? '5173' : (port === '5173' ? '5174' : '5173');
       return `${protocol}//${hostname}:${targetPort}/`;
     }
-    return '/admin';
+    return 'https://icemnoticeadmin.vercel.app/';
   };
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -64,7 +64,7 @@ export const App: React.FC = () => {
       const targetPort = port === '5173' ? '5174' : (port === '5174' ? '5173' : '5173');
       return `${protocol}//${hostname}:${targetPort}/`;
     }
-    return '/';
+    return 'https://icem-notice-7ppq.vercel.app/';
   };
 
   // Hash-based routing
