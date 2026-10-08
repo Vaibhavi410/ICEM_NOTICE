@@ -59,6 +59,7 @@ export const NoticeFilterBar: React.FC<NoticeFilterBarProps> = ({
     { label: 'Information Technology', value: 'it' },
     { label: 'Mechanical', value: 'mech' },
     { label: 'Civil', value: 'civil' },
+    { label: 'ENTC', value: 'entc' },
   ];
 
   const hasActiveFilters =
