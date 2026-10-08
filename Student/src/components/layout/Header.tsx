@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (onNavigateAdminLogin) {
       onNavigateAdminLogin();
     } else {
-      window.location.hash = '#/admin-login';
+      window.location.href = 'https://icemnoticeadmin.vercel.app/';
     }
   };
 
@@ -79,7 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Polished Admin Portal Entry Button */}
         <a
-          href="#/admin-login"
+          href="https://icemnoticeadmin.vercel.app/"
           onClick={handleAdminClick}
           className="group relative inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-gradient-to-b from-[#003c84] to-[#00275a] hover:from-[#002e6b] hover:to-[#001d45] active:scale-[0.98] text-white text-xs font-semibold rounded-sm shadow-xs hover:shadow-sm border border-[#00275a]/40 transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#003c84]/30 select-none"
           title="Sign in to Admin Portal"

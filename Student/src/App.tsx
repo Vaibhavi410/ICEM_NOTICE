@@ -16,6 +16,18 @@ import {
   TARGET_AUDIENCES,
 } from '../../shared/targetAudiences';
 
+const getAdminPortalUrl = () => {
+  const productionUrl = 'https://icemnoticeadmin.vercel.app/';
+  if (typeof window === 'undefined') return productionUrl;
+
+  const { protocol, hostname, port } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    const targetPort = port === '5174' ? '5173' : (port === '5173' ? '5174' : '5173');
+    return `${protocol}//${hostname}:${targetPort}/`;
+  }
+  return productionUrl;
+};
+
 export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<string>('dashboard');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -291,7 +303,9 @@ export const App: React.FC = () => {
         onSearchChange={setSearchTerm}
         onSearchSubmit={handleSearchSubmit}
         onNavigateNotice={handleSelectNotice}
-        onNavigateAdminLogin={() => navigateTo('admin-login')}
+        onNavigateAdminLogin={() => {
+          window.location.href = getAdminPortalUrl();
+        }}
       />
 
       {/* Main Content Area */}
