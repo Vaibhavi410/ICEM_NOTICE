@@ -1,5 +1,5 @@
 import { prisma } from '../config/prisma';
-import { EmailService, EmailSendResult } from './email.service';
+import { EmailService, type EmailSendResult } from './email.service';
 
 export type SubscriptionEmailStatus = 'sent' | 'failed' | 'not_sent_already_active';
 
@@ -47,6 +47,7 @@ export class SubscriptionService {
         where: { id: existing.id },
         data: { isActive: true },
       });
+      console.info('[SubscriptionService] Subscription saved');
 
       const emailResult = await this.sendConfirmation(normalizedEmail);
 
@@ -63,6 +64,7 @@ export class SubscriptionService {
     await prisma.newsletterSubscription.create({
       data: { email: normalizedEmail },
     });
+    console.info('[SubscriptionService] Subscription saved');
 
     const emailResult = await this.sendConfirmation(normalizedEmail);
 
