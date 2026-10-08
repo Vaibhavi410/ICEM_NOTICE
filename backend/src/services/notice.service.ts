@@ -391,9 +391,13 @@ export class NoticeService {
               `[NoticeService] Failed to send new-notice email to ${subscribers[index].email}:`,
               result.reason
             );
-          } else if (!result.value) {
-            console.warn(
-              `[NoticeService] New-notice email was not sent to ${subscribers[index].email}.`
+          } else if (!result.value.success) {
+            console.error(
+              `[NoticeService] New-notice email failed for ${subscribers[index].email}: ${result.value.error || 'Unknown email delivery error.'}`
+            );
+          } else {
+            console.info(
+              `[NoticeService] New-notice email sent successfully. Resend message ID: ${result.value.id ?? 'unknown'}`
             );
           }
         });
