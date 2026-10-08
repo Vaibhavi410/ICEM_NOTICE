@@ -56,6 +56,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState('');
+  const [subscriptionEmailStatus, setSubscriptionEmailStatus] = useState<
+    'sent' | 'failed' | 'not_sent_already_active' | null
+  >(null);
+  const subscriptionInFlightRef = useRef(false);
   const [isDepartmentMenuOpen, setIsDepartmentMenuOpen] = useState(false);
   const [expandedAcademicTarget, setExpandedAcademicTarget] = useState<string | null>(null);
   const [departmentMenuPosition, setDepartmentMenuPosition] = useState({ top: 0, left: 0 });
@@ -138,17 +144,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (subscriptionInFlightRef.current) return;
+
     const error = validateEmail(email);
     if (error) {
       setEmailError(error);
       return;
     }
     setEmailError('');
-    setIsSubscribed(true);
+    setSubscriptionError('');
+    subscriptionInFlightRef.current = true;
+    setIsSubscribing(true);
+
     try {
-      await StudentApiService.subscribeNewsletter({ email: email.trim() });
+      const result = await StudentApiService.subscribeNewsletter({ email: email.trim() });
+      if (!result.subscriptionSaved) {
+        throw new Error('The subscription was not saved.');
+      }
+
+      setIsSubscribed(true);
+      setSubscriptionEmailStatus(result.emailStatus);
     } catch (err) {
       console.warn('Backend newsletter subscription error:', err);
+      setSubscriptionError('We could not complete your subscription. Please try again.');
+    } finally {
+      subscriptionInFlightRef.current = false;
+      setIsSubscribing(false);
     }
   };
 
@@ -397,10 +418,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </p>
 
               {isSubscribed ? (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-2.5 text-emerald-800 text-xs flex items-start gap-2 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                  <p className="text-[11px] text-emerald-800 leading-snug font-medium">
-                    ✓ You're subscribed! You'll receive new notices by email.
+                <div className={`border rounded-sm p-2.5 text-xs flex items-start gap-2 animate-in fade-in ${
+                  subscriptionEmailStatus === 'failed'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                  <CheckCircle2 className={`w-4 h-4 mt-0.5 shrink-0 ${
+                    subscriptionEmailStatus === 'failed' ? 'text-amber-600' : 'text-emerald-600'
+                  }`} />
+                  <p className={`text-[11px] leading-snug font-medium ${
+                    subscriptionEmailStatus === 'failed' ? 'text-amber-800' : 'text-emerald-800'
+                  }`}>
+                    {subscriptionEmailStatus === 'sent'
+                      ? "You're subscribed! A confirmation email has been sent."
+                      : subscriptionEmailStatus === 'not_sent_already_active'
+                        ? 'This email is already subscribed. No duplicate confirmation was sent.'
+                        : "You're subscribed, but we couldn't send the confirmation email. Please try again later."}
                   </p>
                 </div>
               ) : (
@@ -408,9 +441,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <input
                     type="email"
                     value={email}
+                    disabled={isSubscribing}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (emailError) setEmailError('');
+                      if (subscriptionError) setSubscriptionError('');
                     }}
                     placeholder="Enter your email address"
                     className={`w-full px-2.5 py-1.5 text-xs bg-[#FFFFFF] border rounded-md text-[#17365D] placeholder:text-[#5B6F86] focus:border-[#315B8A] focus:ring-2 focus:ring-[#315B8A]/20 focus:outline-none transition-colors ${emailError ? 'border-red-400 focus:border-red-500' : 'border-[#C5D3E2]'
@@ -422,11 +457,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span>{emailError}</span>
                     </div>
                   )}
+                  {subscriptionError && (
+                    <div role="alert" className="flex items-center gap-1 text-[10px] text-red-600 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{subscriptionError}</span>
+                    </div>
+                  )}
                   <button
                     type="submit"
-                    className="w-full py-1.5 px-3 bg-[#173F6B] hover:bg-[#0F2F52] text-white text-xs font-semibold rounded-md transition-colors duration-150 cursor-pointer text-center shadow-2xs hover:shadow-sm"
+                    disabled={isSubscribing}
+                    className="w-full py-1.5 px-3 bg-[#173F6B] hover:bg-[#0F2F52] text-white text-xs font-semibold rounded-md transition-colors duration-150 cursor-pointer text-center shadow-2xs hover:shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Subscribe
+                    {isSubscribing ? 'Subscribing...' : 'Subscribe'}
                   </button>
                 </form>
               )}

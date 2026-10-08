@@ -1,54 +1,66 @@
-import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env';
 
 export class EmailService {
-  private static transporter: Transporter | null = null;
+  private static resend: Resend | null = null;
 
-  /**
-   * Initializes or returns the cached Nodemailer SMTP transporter.
-   * If SMTP is unconfigured, returns null to avoid unhandled socket exceptions.
-   */
-  private static getTransporter(): Transporter | null {
-    if (this.transporter) {
-      return this.transporter;
-    }
-
-    if (!env.SMTP_HOST || !env.SMTP_USER) {
+  private static getClient(): Resend | null {
+    if (!env.RESEND_API_KEY) {
       return null;
     }
 
-    this.transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_SECURE,
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-      },
-    });
+    if (!this.resend) {
+      this.resend = new Resend(env.RESEND_API_KEY);
+    }
 
-    return this.transporter;
+    return this.resend;
+  }
+
+  private static async deliverEmail(
+    mailOptions: { to: string; subject: string; text: string; html: string },
+    emailType: string
+  ): Promise<boolean> {
+    const client = this.getClient();
+    if (!client) {
+      console.warn(`[EmailService] Resend API key is not configured. Skipping ${emailType}.`);
+      return false;
+    }
+
+    if (!env.EMAIL_FROM) {
+      console.warn(`[EmailService] EMAIL_FROM is not configured. Skipping ${emailType}.`);
+      return false;
+    }
+
+    try {
+      const { data, error } = await client.emails.send({
+        ...mailOptions,
+        from: env.EMAIL_FROM,
+      });
+
+      if (error) {
+        const safeMessage = error.message.replace(env.RESEND_API_KEY || '', '[redacted]');
+        console.error(`[EmailService] Failed to send ${emailType}: ${error.name} ${safeMessage}`);
+        return false;
+      }
+
+      console.log(`[EmailService] ${emailType} sent successfully (Resend ID: ${data.id}).`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const safeMessage = message.replace(env.RESEND_API_KEY || '', '[redacted]');
+      console.error(`[EmailService] Failed to send ${emailType}: ${safeMessage}`);
+      return false;
+    }
   }
 
   /**
    * Sends a professional subscription confirmation email to the subscriber.
-   * Does NOT throw on failures, ensuring database operations remain intact.
+   * Email failures do not affect the saved subscription.
    */
   static async sendSubscriptionConfirmation(toEmail: string): Promise<boolean> {
-    const transporter = this.getTransporter();
-
-    if (!transporter) {
-      console.warn(
-        `[EmailService] SMTP not fully configured (host: "${env.SMTP_HOST ? 'configured' : 'missing'}", user: "${env.SMTP_USER ? 'configured' : 'missing'}"). Skipping email confirmation for ${toEmail}.`
-      );
-      return false;
-    }
-
     const portalUrl = env.CLIENT_URLS[1] || env.CLIENT_URLS[0] || 'http://localhost:5174';
 
     const mailOptions = {
-      from: env.EMAIL_FROM,
       to: toEmail,
       subject: 'ICEM Smart Notice Portal — Subscription Confirmed',
       text: `Indira College of Engineering and Management (ICEM)
@@ -287,20 +299,10 @@ Pune, Maharashtra, India
 </html>`,
     };
 
-    try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log(`[EmailService] Confirmation email sent successfully to ${toEmail} (MessageId: ${info.messageId})`);
-      return true;
-    } catch (error: any) {
-      // Safely log the error message without exposing passwords/secrets
-      console.error(
-        `[EmailService] Failed to send subscription confirmation email to ${toEmail}:`,
-        error?.message || error
-      );
-      return false;
-    }
+    return this.deliverEmail(mailOptions, 'subscription confirmation email');
   }
-    static async sendNewNoticeNotification(
+
+  static async sendNewNoticeNotification(
     toEmail: string,
     notice: {
       title: string;
@@ -311,22 +313,12 @@ Pune, Maharashtra, India
       refNo?: string;
     }
   ): Promise<boolean> {
-    const transporter = this.getTransporter();
-
-    if (!transporter) {
-      console.warn(
-        `[EmailService] SMTP not configured. Skipping notice notification for ${toEmail}.`
-      );
-      return false;
-    }
-
     const portalUrl =
       env.CLIENT_URLS[0] || 'http://localhost:5173';
 
     const noticeUrl = `${portalUrl}/#/notice/${notice.id}`;
 
     const mailOptions = {
-      from: env.EMAIL_FROM,
       to: toEmail,
       subject: `New ICEM Notice: ${notice.title}`,
 
@@ -503,22 +495,6 @@ You are receiving this email because you subscribed to ICEM Notice alerts.
 `,
     };
 
-    try {
-      const info = await transporter.sendMail(mailOptions);
-
-      console.log(
-        `[EmailService] Notice notification sent to ${toEmail} ` +
-        `(MessageId: ${info.messageId})`
-      );
-
-      return true;
-    } catch (error: any) {
-      console.error(
-        `[EmailService] Failed to send notice notification to ${toEmail}:`,
-        error?.message || error
-      );
-
-      return false;
-    }
+    return this.deliverEmail(mailOptions, 'new-notice notification email');
   }
 }

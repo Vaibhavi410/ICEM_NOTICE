@@ -242,11 +242,25 @@ export class StudentApiService {
     email: string;
     department?: string;
     year?: string;
-  }): Promise<{ message: string }> {
-    const res = await this.request('/subscriptions', {
+  }): Promise<{
+    message: string;
+    subscriptionSaved: boolean;
+    emailStatus: 'sent' | 'failed' | 'not_sent_already_active';
+  }> {
+    const res = await this.request<{
+      subscriptionSaved: boolean;
+      emailStatus: 'sent' | 'failed' | 'not_sent_already_active';
+    }>('/subscriptions', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return { message: res.message || 'Subscribed successfully' };
+    if (!res.data) {
+      throw new Error('Subscription response was incomplete.');
+    }
+
+    return {
+      message: res.message || 'Subscription processed.',
+      ...res.data,
+    };
   }
 }

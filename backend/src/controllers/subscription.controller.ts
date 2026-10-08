@@ -8,7 +8,10 @@ export class SubscriptionController {
     try {
       const validated = subscriptionSchema.parse(req.body);
       const result = await SubscriptionService.subscribe(validated.email);
-      return ApiResponse.success(res, result.message);
+      return ApiResponse.success(res, result.message, {
+        subscriptionSaved: result.subscriptionSaved,
+        emailStatus: result.emailStatus,
+      });
     } catch (error) {
       next(error);
     }
