@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd Student && npm install && npm run build",
+  "outputDirectory": "Student/dist",
+  "installCommand": "cd Student && npm install"
+}
