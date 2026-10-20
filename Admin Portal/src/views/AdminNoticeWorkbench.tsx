@@ -204,6 +204,8 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
 
   // Edit state for existing notice
   const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // Filter state
   const [filters, setFilters] = useState<AdminFilterState>({
@@ -513,6 +515,10 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       ? (actionDeadlineDate ? formatDeadlineToDisplay(actionDeadlineDate, actionDeadlineTime) : createNoticeData.actionDeadline?.trim())
       : undefined;
 
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+
     try {
       if (editingNoticeId) {
         // Update existing notice on backend
@@ -587,6 +593,9 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
     } catch (err: any) {
       console.error('Failed to save notice to backend:', err);
       showToast(err.message || 'Failed to save notice to backend.', 'error');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -1058,12 +1067,15 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
               </button>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-6 py-2.5 bg-[#003c84] hover:bg-[#00275a] text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSaving}
+                className="w-full sm:w-auto px-6 py-2.5 bg-[#003c84] hover:bg-[#00275a] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   {editingNoticeId ? 'save' : 'publish'}
                 </span>
-                <span>{editingNoticeId ? 'Update Notice' : 'Publish Notice'}</span>
+                <span>
+                  {isSaving ? (editingNoticeId ? 'Updating…' : 'Publishing…') : (editingNoticeId ? 'Update Notice' : 'Publish Notice')}
+                </span>
               </button>
             </div>
           </form>

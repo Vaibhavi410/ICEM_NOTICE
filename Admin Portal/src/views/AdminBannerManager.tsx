@@ -36,6 +36,8 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({
   const [banners, setBanners] = useState<DashboardBanner[]>([]);
   const [formData, setFormData] = useState<Partial<DashboardBanner>>(emptyBannerState);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [imageInputMode, setImageInputMode] = useState<'preset' | 'url' | 'upload'>('preset');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,6 +236,10 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({
       isActive: formData.isActive !== false,
     };
 
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+
     try {
       if (editingId) {
         const saved = await AdminApiService.updateBanner(editingId, bannerPayload);
@@ -284,6 +290,9 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({
 
       saveStoredBanners(updatedList);
       setBanners(updatedList);
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
 
     handleCancelEdit();
@@ -942,12 +951,17 @@ export const AdminBannerManager: React.FC<AdminBannerManagerProps> = ({
               <div className="flex flex-col gap-2 pt-3 border-t border-[#e2e6ec]">
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-[#003c84] hover:bg-[#00275a] text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={isSaving}
+                  className="w-full py-2.5 bg-[#003c84] hover:bg-[#00275a] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">
                     {editingId ? 'save' : 'publish'}
                   </span>
-                  <span>{editingId ? 'Save Changes' : 'Publish Banner'}</span>
+                  <span>
+                    {isSaving
+                      ? (editingId ? 'Saving…' : 'Publishing…')
+                      : (editingId ? 'Save Changes' : 'Publish Banner')}
+                  </span>
                 </button>
 
                 {editingId && (
