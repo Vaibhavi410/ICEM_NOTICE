@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { EmailService } from './email.service';
 import { prisma } from '../config/prisma';
 import { Prisma } from '@prisma/client';
@@ -310,7 +311,7 @@ export class NoticeService {
 
     const refNo =
       data.refNo ||
-      `REF-${now.getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+      `REF-${now.getFullYear()}-${randomBytes(3).toString('hex').toUpperCase()}`;
 
     const status = (data.status || 'PUBLISHED').toUpperCase() === 'ARCHIVED' ? 'ARCHIVED' : 'PUBLISHED';
 
