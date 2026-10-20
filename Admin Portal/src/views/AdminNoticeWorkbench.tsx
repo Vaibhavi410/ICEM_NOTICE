@@ -525,7 +525,6 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
         const updatePayload: Partial<AdminNotice> = {
           title: createNoticeData.title!.trim(),
           category: createNoticeData.category,
-          status: 'Published',
           summary: noticeSummary,
           content: noticeContent,
           issuedBy: noticeAuthority,
