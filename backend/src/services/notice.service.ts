@@ -436,6 +436,7 @@ export class NoticeService {
       : existing.status;
 
     // If attachments are passed, recreate them and clean up replaced storage objects
+    let pathsToRemove: string[] = [];
     let attachmentsUpdate: any = undefined;
     if (data.attachments && Array.isArray(data.attachments)) {
       const newPaths = new Set(
@@ -445,22 +446,9 @@ export class NoticeService {
       );
 
       // Identify old storage paths that are NOT in the new attachments list
-      const pathsToRemove = (existing.attachments || [])
+      pathsToRemove = (existing.attachments || [])
         .map((att) => att.fileUrl)
         .filter((p: string) => isSupabaseStoragePath(p) && !newPaths.has(p));
-
-      if (pathsToRemove.length > 0) {
-        try {
-          const { error: removeError } = await supabase.storage
-            .from(env.SUPABASE_STORAGE_BUCKET)
-            .remove(pathsToRemove);
-          if (removeError) {
-            console.error('[Supabase Storage] Failed to remove replaced attachments:', removeError.message);
-          }
-        } catch (err: any) {
-          console.error('[Supabase Storage] Error removing replaced attachments from storage:', err.message || err);
-        }
-      }
 
       attachmentsUpdate = {
         deleteMany: {},
@@ -511,6 +499,19 @@ export class NoticeService {
         attachments: true,
       },
     });
+
+    if (pathsToRemove.length > 0) {
+      try {
+        const { error: removeError } = await supabase.storage
+          .from(env.SUPABASE_STORAGE_BUCKET)
+          .remove(pathsToRemove);
+        if (removeError) {
+          console.error('[Supabase Storage] Failed to remove replaced attachments:', removeError.message);
+        }
+      } catch (err: any) {
+        console.error('[Supabase Storage] Error removing replaced attachments from storage:', err.message || err);
+      }
+    }
 
     return this.normalizeNotice(updated);
   }
