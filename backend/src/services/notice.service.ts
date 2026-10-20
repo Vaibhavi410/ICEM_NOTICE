@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { EmailService } from './email.service';
 import { prisma } from '../config/prisma';
 import { Prisma } from '@prisma/client';
@@ -60,8 +61,6 @@ export interface NoticeQueryParams {
 }
 
 export class NoticeService {
-  private emailService = new EmailService();
-
   /**
    * Normalizes notice object to satisfy both Admin Portal and Student Portal interfaces
    */
@@ -304,13 +303,30 @@ export class NoticeService {
   }
 
   static async createNotice(data: any, authorId?: string) {
+    const title = String(data.title ?? '').trim();
+    const duplicate = await prisma.notice.findFirst({
+      where: {
+        title,
+        category: data.category,
+        targetAudience: data.targetAudience || 'FY-BTECH',
+        createdById: authorId || null,
+        createdAt: { gte: new Date(Date.now() - 30_000) },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { attachments: true },
+    });
+    if (duplicate) {
+      console.warn(`[NoticeService] Duplicate submission ignored (existing notice: ${duplicate.id}).`);
+      return this.normalizeNotice(duplicate);
+    }
+
     const now = new Date();
     const displayDate = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     const refNo =
       data.refNo ||
-      `REF-${now.getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
+      `REF-${now.getFullYear()}-${randomBytes(3).toString('hex').toUpperCase()}`;
 
     const status = (data.status || 'PUBLISHED').toUpperCase() === 'ARCHIVED' ? 'ARCHIVED' : 'PUBLISHED';
 
@@ -367,40 +383,9 @@ export class NoticeService {
         },
       });
 
-      try {
-        const subscribers = await prisma.newsletterSubscription.findMany({
-          where: { isActive: true },
-        });
-
-        const emailResults = await Promise.allSettled(
-          subscribers.map((subscriber) =>
-            EmailService.sendNewNoticeNotification(subscriber.email, {
-              id: notice.id,
-              title: notice.title,
-              category: notice.category,
-              issuedBy: notice.issuedBy,
-              summary: notice.summary,
-              refNo: notice.refNo,
-            })
-          )
-        );
-
-        emailResults.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.error(
-              `[NoticeService] Failed to send new-notice email to ${subscribers[index].email}:`,
-              result.reason
-            );
-          } else if (!result.value) {
-            console.warn(
-              `[NoticeService] New-notice email was not sent to ${subscribers[index].email}.`
-            );
-          }
-        });
-      } catch (emailError: any) {
-        console.error(
-          '[NoticeService] Failed to notify newsletter subscribers about the new notice:',
-          emailError?.message || emailError
+      if (status === 'PUBLISHED') {
+        void this.notifySubscribers(notice).catch((err) =>
+          console.error('[NoticeService] Subscriber notification crashed:', err?.message || err)
         );
       }
 
@@ -449,6 +434,7 @@ export class NoticeService {
       : existing.status;
 
     // If attachments are passed, recreate them and clean up replaced storage objects
+    let pathsToRemove: string[] = [];
     let attachmentsUpdate: any = undefined;
     if (data.attachments && Array.isArray(data.attachments)) {
       const newPaths = new Set(
@@ -458,22 +444,9 @@ export class NoticeService {
       );
 
       // Identify old storage paths that are NOT in the new attachments list
-      const pathsToRemove = (existing.attachments || [])
+      pathsToRemove = (existing.attachments || [])
         .map((att) => att.fileUrl)
         .filter((p: string) => isSupabaseStoragePath(p) && !newPaths.has(p));
-
-      if (pathsToRemove.length > 0) {
-        try {
-          const { error: removeError } = await supabase.storage
-            .from(env.SUPABASE_STORAGE_BUCKET)
-            .remove(pathsToRemove);
-          if (removeError) {
-            console.error('[Supabase Storage] Failed to remove replaced attachments:', removeError.message);
-          }
-        } catch (err: any) {
-          console.error('[Supabase Storage] Error removing replaced attachments from storage:', err.message || err);
-        }
-      }
 
       attachmentsUpdate = {
         deleteMany: {},
@@ -524,6 +497,19 @@ export class NoticeService {
         attachments: true,
       },
     });
+
+    if (pathsToRemove.length > 0) {
+      try {
+        const { error: removeError } = await supabase.storage
+          .from(env.SUPABASE_STORAGE_BUCKET)
+          .remove(pathsToRemove);
+        if (removeError) {
+          console.error('[Supabase Storage] Failed to remove replaced attachments:', removeError.message);
+        }
+      } catch (err: any) {
+        console.error('[Supabase Storage] Error removing replaced attachments from storage:', err.message || err);
+      }
+    }
 
     return this.normalizeNotice(updated);
   }
@@ -643,5 +629,79 @@ export class NoticeService {
       important: n.isImportant,
       urgent: n.isUrgent,
     }));
+  }
+
+  private static async notifySubscribers(notice: {
+    id: string;
+    title: string;
+    category: string;
+    issuedBy: string;
+    summary: string;
+    refNo: string;
+  }): Promise<void> {
+    try {
+      const subscribers = await prisma.newsletterSubscription.findMany({
+        where: { isActive: true },
+      });
+
+      const total = subscribers.length;
+      if (total === 0) {
+        return;
+      }
+
+      const BATCH_SIZE = 2;
+      const BATCH_DELAY_MS = 1100;
+      let sent = 0;
+      let failed = 0;
+
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = subscribers.slice(i, i + BATCH_SIZE);
+
+        const results = await Promise.allSettled(
+          batch.map((sub) =>
+            EmailService.sendNewNoticeNotification(sub.email, {
+              id: notice.id,
+              title: notice.title,
+              category: notice.category,
+              issuedBy: notice.issuedBy,
+              summary: notice.summary,
+              refNo: notice.refNo,
+            })
+          )
+        );
+
+        results.forEach((res, batchIdx) => {
+          const subscriberEmail = batch[batchIdx].email;
+          if (res.status === 'fulfilled') {
+            if (res.value.success) {
+              sent++;
+            } else {
+              failed++;
+              console.error(
+                `[NoticeService] Email delivery failed for ${subscriberEmail}: ${res.value.error || 'Unknown error'}`
+              );
+            }
+          } else {
+            failed++;
+            console.error(
+              `[NoticeService] Email delivery failed for ${subscriberEmail}: ${res.reason?.message || res.reason || 'Promise rejected'}`
+            );
+          }
+        });
+
+        if (i + BATCH_SIZE < total) {
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+        }
+      }
+
+      console.info(
+        `[NoticeService] Notice ${notice.refNo}: ${sent} emails sent, ${failed} failed (of ${total}).`
+      );
+    } catch (err: any) {
+      console.error(
+        '[NoticeService] Failed to notify newsletter subscribers about the new notice:',
+        err?.message || err
+      );
+    }
   }
 }

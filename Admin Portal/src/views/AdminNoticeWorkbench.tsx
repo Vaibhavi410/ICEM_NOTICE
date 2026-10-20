@@ -31,16 +31,13 @@ const CATEGORIES: AdminNoticeCategory[] = [
 ];
 
 const ISSUING_AUTHORITIES = [
-  'Training & Placement Officer',
-  'Controller of Examinations',
+  'Head Of Department',
+  'Exam Admin',
   'Dean Academics',
-  'Registrar Office',
-  'Head of Industry Relations',
-  'Cultural Committee Head',
-  'Chief Librarian',
-  'Director of Physical Education',
-  'Principal Office',
-  'College Admin',
+  'Registrar',
+  'Principal',
+  'Training and Placement',
+  'Events Head',
 ];
 
 const normalizeNoticeDateToKey = (dateStr: string): string => {
@@ -135,7 +132,7 @@ const getInitialCreateNoticeState = (): Partial<AdminNotice> => {
     departmentKey: 'admin',
     summary: '',
     content: '',
-    issuedBy: 'Training & Placement Officer',
+    issuedBy: 'Head Of Department',
     targetAudience: 'FY-BTECH',
     academicYear: 'AY 2026-27',
     date: displayDate,
@@ -204,6 +201,9 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
 
   // Edit state for existing notice
   const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const savingRef = useRef(false);
 
   // Filter state
   const [filters, setFilters] = useState<AdminFilterState>({
@@ -460,7 +460,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       status: 'Published',
       summary: notice.summary,
       content: notice.content || notice.summary,
-      issuedBy: notice.issuedBy || 'Training & Placement Officer',
+      issuedBy: notice.issuedBy || 'Head Of Department',
       department: notice.department,
       departmentKey: notice.departmentKey,
       date: notice.date,
@@ -485,6 +485,10 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
   // Dedicated Full-Page Create/Edit Notice Save Handler with Backend Persistence
   const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading) {
+      showToast('Please wait for uploads to finish.', 'error');
+      return;
+    }
     if (!createNoticeData.title || !createNoticeData.title.trim()) {
       showToast('Please enter a notice title.', 'error');
       return;
@@ -499,7 +503,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       noticeSummary;
     const noticeDate = createNoticeData.date || isoToDisplayDate();
     const noticeTime = createNoticeData.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const noticeAuthority = createNoticeData.issuedBy?.trim() || 'Training & Placement Officer';
+    const noticeAuthority = createNoticeData.issuedBy?.trim() || 'Head Of Department';
     const noticeAudience = isDepartmentAcademicTarget(createNoticeData.targetAudience || '')
       ? createDepartmentTargetAudience(
           createNoticeData.targetAudience as (typeof DEPARTMENT_ACADEMIC_TARGETS)[number],
@@ -513,13 +517,16 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       ? (actionDeadlineDate ? formatDeadlineToDisplay(actionDeadlineDate, actionDeadlineTime) : createNoticeData.actionDeadline?.trim())
       : undefined;
 
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+
     try {
       if (editingNoticeId) {
         // Update existing notice on backend
         const updatePayload: Partial<AdminNotice> = {
           title: createNoticeData.title!.trim(),
           category: createNoticeData.category,
-          status: 'Published',
           summary: noticeSummary,
           content: noticeContent,
           issuedBy: noticeAuthority,
@@ -587,6 +594,9 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
     } catch (err: any) {
       console.error('Failed to save notice to backend:', err);
       showToast(err.message || 'Failed to save notice to backend.', 'error');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -607,6 +617,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
 
+    setIsUploading(true);
     try {
       showToast('Uploading attachments to server...');
       const uploaded = await AdminApiService.uploadNoticeAttachments(fileArray);
@@ -616,42 +627,10 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       }));
       showToast(`Attached ${uploaded.length} document${uploaded.length > 1 ? 's' : ''}`);
     } catch (err: any) {
-      console.warn('Backend upload failed, keeping local metadata:', err);
-      const newAttachments: Array<{ name: string; size: string; type: 'pdf' | 'excel' | 'doc' | 'image' }> = [];
-      fileArray.forEach((file) => {
-        let fileType: 'pdf' | 'excel' | 'doc' | 'image' = 'pdf';
-        const nameLower = file.name.toLowerCase();
-        if (nameLower.endsWith('.xls') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.csv')) {
-          fileType = 'excel';
-        } else if (nameLower.endsWith('.doc') || nameLower.endsWith('.docx')) {
-          fileType = 'doc';
-        } else if (
-          nameLower.endsWith('.jpg') ||
-          nameLower.endsWith('.jpeg') ||
-          nameLower.endsWith('.png') ||
-          nameLower.endsWith('.webp')
-        ) {
-          fileType = 'image';
-        }
-
-        const sizeStr =
-          file.size > 1024 * 1024
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-            : `${Math.round(file.size / 1024)} KB`;
-
-        newAttachments.push({
-          name: file.name,
-          size: sizeStr,
-          type: fileType,
-        });
-      });
-
-      setCreateNoticeData((prev) => ({
-        ...prev,
-        attachments: [...(prev.attachments || []), ...newAttachments],
-      }));
-
-      showToast(`Attached ${newAttachments.length} document${newAttachments.length > 1 ? 's' : ''}`);
+      console.error('Backend upload failed:', err);
+      showToast('Upload failed. Please try again.', 'error');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -827,7 +806,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
                   <div className="relative">
                     <select
                       required
-                      value={createNoticeData.issuedBy || 'Training & Placement Officer'}
+                      value={createNoticeData.issuedBy || 'Head Of Department'}
                       onChange={(e) => setCreateNoticeData((prev) => ({ ...prev, issuedBy: e.target.value }))}
                       className="w-full px-3.5 py-2.5 bg-white text-[#1c1b1b] text-sm border border-[#e2e6ec] rounded-lg focus:border-[#003c84] focus:ring-1 focus:ring-[#003c84] focus:outline-none appearance-none cursor-pointer pr-8"
                     >
@@ -1058,12 +1037,23 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
               </button>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-6 py-2.5 bg-[#003c84] hover:bg-[#00275a] text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isSaving || isUploading}
+                className="w-full sm:w-auto px-6 py-2.5 bg-[#003c84] hover:bg-[#00275a] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   {editingNoticeId ? 'save' : 'publish'}
                 </span>
-                <span>{editingNoticeId ? 'Update Notice' : 'Publish Notice'}</span>
+                <span>
+                  {isUploading
+                    ? 'Uploading…'
+                    : isSaving
+                    ? editingNoticeId
+                      ? 'Updating…'
+                      : 'Publishing…'
+                    : editingNoticeId
+                    ? 'Update Notice'
+                    : 'Publish Notice'}
+                </span>
               </button>
             </div>
           </form>

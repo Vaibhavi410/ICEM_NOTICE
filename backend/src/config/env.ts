@@ -29,6 +29,8 @@ export function validateProductionConfig(
     SUPABASE_URL: string | undefined;
     SUPABASE_SERVICE_ROLE_KEY: string | undefined;
     SUPABASE_STORAGE_BUCKET: string | undefined;
+    RESEND_API_KEY: string | undefined;
+    EMAIL_FROM: string | undefined;
   }
 ): void {
   if (nodeEnv.toLowerCase() !== 'production') {
@@ -52,6 +54,8 @@ validateProductionConfig(NODE_ENV, {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   SUPABASE_STORAGE_BUCKET: process.env.SUPABASE_STORAGE_BUCKET,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  EMAIL_FROM: process.env.EMAIL_FROM,
 });
 
 const jwtSecrets = resolveJwtSecrets(

@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 import { env } from '../config/env';
 
+export interface EmailSendResult {
+  success: boolean;
+  id?: string;
+  error?: string;
+}
+
 export class EmailService {
   private static resend: Resend | null = null;
 
@@ -19,16 +25,18 @@ export class EmailService {
   private static async deliverEmail(
     mailOptions: { to: string; subject: string; text: string; html: string },
     emailType: string
-  ): Promise<boolean> {
+  ): Promise<EmailSendResult> {
     const client = this.getClient();
     if (!client) {
-      console.warn(`[EmailService] Resend API key is not configured. Skipping ${emailType}.`);
-      return false;
+      const error = 'Resend API key is not configured.';
+      console.error(`[EmailService] ${error} Unable to send ${emailType}.`);
+      return { success: false, error };
     }
 
     if (!env.EMAIL_FROM) {
-      console.warn(`[EmailService] EMAIL_FROM is not configured. Skipping ${emailType}.`);
-      return false;
+      const error = 'EMAIL_FROM is not configured.';
+      console.error(`[EmailService] ${error} Unable to send ${emailType}.`);
+      return { success: false, error };
     }
 
     try {
@@ -39,17 +47,20 @@ export class EmailService {
 
       if (error) {
         const safeMessage = error.message.replace(env.RESEND_API_KEY || '', '[redacted]');
-        console.error(`[EmailService] Failed to send ${emailType}: ${error.name} ${safeMessage}`);
-        return false;
+        console.error(`[EmailService] Resend email failed: ${safeMessage}`);
+        return { success: false, error: safeMessage };
       }
 
-      console.log(`[EmailService] ${emailType} sent successfully (Resend ID: ${data.id}).`);
-      return true;
+      const messageId = data?.id;
+      console.info(
+        `[EmailService] Resend email sent successfully. Resend message ID: ${messageId ?? 'unknown'}`
+      );
+      return { success: true, id: messageId ?? undefined };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : 'Unexpected email delivery failure.';
       const safeMessage = message.replace(env.RESEND_API_KEY || '', '[redacted]');
-      console.error(`[EmailService] Failed to send ${emailType}: ${safeMessage}`);
-      return false;
+      console.error(`[EmailService] Resend email failed: ${safeMessage}`);
+      return { success: false, error: safeMessage };
     }
   }
 
@@ -57,7 +68,7 @@ export class EmailService {
    * Sends a professional subscription confirmation email to the subscriber.
    * Email failures do not affect the saved subscription.
    */
-  static async sendSubscriptionConfirmation(toEmail: string): Promise<boolean> {
+  static async sendSubscriptionConfirmation(toEmail: string): Promise<EmailSendResult> {
     const portalUrl = env.CLIENT_URLS[1] || env.CLIENT_URLS[0] || 'http://localhost:5174';
 
     const mailOptions = {
@@ -312,7 +323,7 @@ Pune, Maharashtra, India
       id: string;
       refNo?: string;
     }
-  ): Promise<boolean> {
+  ): Promise<EmailSendResult> {
     const portalUrl =
       env.CLIENT_URLS[0] || 'http://localhost:5173';
 
