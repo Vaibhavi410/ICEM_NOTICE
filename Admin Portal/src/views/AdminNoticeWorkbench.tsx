@@ -205,6 +205,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
   // Edit state for existing notice
   const [editingNoticeId, setEditingNoticeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const savingRef = useRef(false);
 
   // Filter state
@@ -487,6 +488,10 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
   // Dedicated Full-Page Create/Edit Notice Save Handler with Backend Persistence
   const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploading) {
+      showToast('Please wait for uploads to finish.', 'error');
+      return;
+    }
     if (!createNoticeData.title || !createNoticeData.title.trim()) {
       showToast('Please enter a notice title.', 'error');
       return;
@@ -615,6 +620,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
     if (!files || files.length === 0) return;
     const fileArray = Array.from(files);
 
+    setIsUploading(true);
     try {
       showToast('Uploading attachments to server...');
       const uploaded = await AdminApiService.uploadNoticeAttachments(fileArray);
@@ -624,42 +630,10 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       }));
       showToast(`Attached ${uploaded.length} document${uploaded.length > 1 ? 's' : ''}`);
     } catch (err: any) {
-      console.warn('Backend upload failed, keeping local metadata:', err);
-      const newAttachments: Array<{ name: string; size: string; type: 'pdf' | 'excel' | 'doc' | 'image' }> = [];
-      fileArray.forEach((file) => {
-        let fileType: 'pdf' | 'excel' | 'doc' | 'image' = 'pdf';
-        const nameLower = file.name.toLowerCase();
-        if (nameLower.endsWith('.xls') || nameLower.endsWith('.xlsx') || nameLower.endsWith('.csv')) {
-          fileType = 'excel';
-        } else if (nameLower.endsWith('.doc') || nameLower.endsWith('.docx')) {
-          fileType = 'doc';
-        } else if (
-          nameLower.endsWith('.jpg') ||
-          nameLower.endsWith('.jpeg') ||
-          nameLower.endsWith('.png') ||
-          nameLower.endsWith('.webp')
-        ) {
-          fileType = 'image';
-        }
-
-        const sizeStr =
-          file.size > 1024 * 1024
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-            : `${Math.round(file.size / 1024)} KB`;
-
-        newAttachments.push({
-          name: file.name,
-          size: sizeStr,
-          type: fileType,
-        });
-      });
-
-      setCreateNoticeData((prev) => ({
-        ...prev,
-        attachments: [...(prev.attachments || []), ...newAttachments],
-      }));
-
-      showToast(`Attached ${newAttachments.length} document${newAttachments.length > 1 ? 's' : ''}`);
+      console.error('Backend upload failed:', err);
+      showToast('Upload failed. Please try again.', 'error');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1066,14 +1040,22 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={isSaving}
+                disabled={isSaving || isUploading}
                 className="w-full sm:w-auto px-6 py-2.5 bg-[#003c84] hover:bg-[#00275a] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   {editingNoticeId ? 'save' : 'publish'}
                 </span>
                 <span>
-                  {isSaving ? (editingNoticeId ? 'Updating…' : 'Publishing…') : (editingNoticeId ? 'Update Notice' : 'Publish Notice')}
+                  {isUploading
+                    ? 'Uploading…'
+                    : isSaving
+                    ? editingNoticeId
+                      ? 'Updating…'
+                      : 'Publishing…'
+                    : editingNoticeId
+                    ? 'Update Notice'
+                    : 'Publish Notice'}
                 </span>
               </button>
             </div>
