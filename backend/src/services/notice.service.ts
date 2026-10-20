@@ -61,8 +61,6 @@ export interface NoticeQueryParams {
 }
 
 export class NoticeService {
-  private emailService = new EmailService();
-
   /**
    * Normalizes notice object to satisfy both Admin Portal and Student Portal interfaces
    */
