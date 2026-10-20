@@ -385,44 +385,9 @@ export class NoticeService {
         },
       });
 
-      try {
-        const subscribers = await prisma.newsletterSubscription.findMany({
-          where: { isActive: true },
-        });
-
-        const emailResults = await Promise.allSettled(
-          subscribers.map((subscriber) =>
-            EmailService.sendNewNoticeNotification(subscriber.email, {
-              id: notice.id,
-              title: notice.title,
-              category: notice.category,
-              issuedBy: notice.issuedBy,
-              summary: notice.summary,
-              refNo: notice.refNo,
-            })
-          )
-        );
-
-        emailResults.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            console.error(
-              `[NoticeService] Failed to send new-notice email to ${subscribers[index].email}:`,
-              result.reason
-            );
-          } else if (!result.value.success) {
-            console.error(
-              `[NoticeService] New-notice email failed for ${subscribers[index].email}: ${result.value.error || 'Unknown email delivery error.'}`
-            );
-          } else {
-            console.info(
-              `[NoticeService] New-notice email sent successfully. Resend message ID: ${result.value.id ?? 'unknown'}`
-            );
-          }
-        });
-      } catch (emailError: any) {
-        console.error(
-          '[NoticeService] Failed to notify newsletter subscribers about the new notice:',
-          emailError?.message || emailError
+      if (status === 'PUBLISHED') {
+        void this.notifySubscribers(notice).catch((err) =>
+          console.error('[NoticeService] Subscriber notification crashed:', err?.message || err)
         );
       }
 
@@ -665,5 +630,79 @@ export class NoticeService {
       important: n.isImportant,
       urgent: n.isUrgent,
     }));
+  }
+
+  private static async notifySubscribers(notice: {
+    id: string;
+    title: string;
+    category: string;
+    issuedBy: string;
+    summary: string;
+    refNo: string;
+  }): Promise<void> {
+    try {
+      const subscribers = await prisma.newsletterSubscription.findMany({
+        where: { isActive: true },
+      });
+
+      const total = subscribers.length;
+      if (total === 0) {
+        return;
+      }
+
+      const BATCH_SIZE = 2;
+      const BATCH_DELAY_MS = 1100;
+      let sent = 0;
+      let failed = 0;
+
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const batch = subscribers.slice(i, i + BATCH_SIZE);
+
+        const results = await Promise.allSettled(
+          batch.map((sub) =>
+            EmailService.sendNewNoticeNotification(sub.email, {
+              id: notice.id,
+              title: notice.title,
+              category: notice.category,
+              issuedBy: notice.issuedBy,
+              summary: notice.summary,
+              refNo: notice.refNo,
+            })
+          )
+        );
+
+        results.forEach((res, batchIdx) => {
+          const subscriberEmail = batch[batchIdx].email;
+          if (res.status === 'fulfilled') {
+            if (res.value.success) {
+              sent++;
+            } else {
+              failed++;
+              console.error(
+                `[NoticeService] Email delivery failed for ${subscriberEmail}: ${res.value.error || 'Unknown error'}`
+              );
+            }
+          } else {
+            failed++;
+            console.error(
+              `[NoticeService] Email delivery failed for ${subscriberEmail}: ${res.reason?.message || res.reason || 'Promise rejected'}`
+            );
+          }
+        });
+
+        if (i + BATCH_SIZE < total) {
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+        }
+      }
+
+      console.info(
+        `[NoticeService] Notice ${notice.refNo}: ${sent} emails sent, ${failed} failed (of ${total}).`
+      );
+    } catch (err: any) {
+      console.error(
+        '[NoticeService] Failed to notify newsletter subscribers about the new notice:',
+        err?.message || err
+      );
+    }
   }
 }
