@@ -305,6 +305,23 @@ export class NoticeService {
   }
 
   static async createNotice(data: any, authorId?: string) {
+    const title = String(data.title ?? '').trim();
+    const duplicate = await prisma.notice.findFirst({
+      where: {
+        title,
+        category: data.category,
+        targetAudience: data.targetAudience || 'FY-BTECH',
+        createdById: authorId || null,
+        createdAt: { gte: new Date(Date.now() - 30_000) },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { attachments: true },
+    });
+    if (duplicate) {
+      console.warn(`[NoticeService] Duplicate submission ignored (existing notice: ${duplicate.id}).`);
+      return this.normalizeNotice(duplicate);
+    }
+
     const now = new Date();
     const displayDate = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const displayTime = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
