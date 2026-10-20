@@ -31,16 +31,13 @@ const CATEGORIES: AdminNoticeCategory[] = [
 ];
 
 const ISSUING_AUTHORITIES = [
-  'Training & Placement Officer',
-  'Controller of Examinations',
+  'Head Of Department',
+  'Exam Admin',
   'Dean Academics',
-  'Registrar Office',
-  'Head of Industry Relations',
-  'Cultural Committee Head',
-  'Chief Librarian',
-  'Director of Physical Education',
-  'Principal Office',
-  'College Admin',
+  'Registrar',
+  'Principal',
+  'Training and Placement',
+  'Events Head',
 ];
 
 const normalizeNoticeDateToKey = (dateStr: string): string => {
@@ -135,7 +132,7 @@ const getInitialCreateNoticeState = (): Partial<AdminNotice> => {
     departmentKey: 'admin',
     summary: '',
     content: '',
-    issuedBy: 'Training & Placement Officer',
+    issuedBy: 'Head Of Department',
     targetAudience: 'FY-BTECH',
     academicYear: 'AY 2026-27',
     date: displayDate,
@@ -463,7 +460,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       status: 'Published',
       summary: notice.summary,
       content: notice.content || notice.summary,
-      issuedBy: notice.issuedBy || 'Training & Placement Officer',
+      issuedBy: notice.issuedBy || 'Head Of Department',
       department: notice.department,
       departmentKey: notice.departmentKey,
       date: notice.date,
@@ -506,7 +503,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
       noticeSummary;
     const noticeDate = createNoticeData.date || isoToDisplayDate();
     const noticeTime = createNoticeData.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const noticeAuthority = createNoticeData.issuedBy?.trim() || 'Training & Placement Officer';
+    const noticeAuthority = createNoticeData.issuedBy?.trim() || 'Head Of Department';
     const noticeAudience = isDepartmentAcademicTarget(createNoticeData.targetAudience || '')
       ? createDepartmentTargetAudience(
           createNoticeData.targetAudience as (typeof DEPARTMENT_ACADEMIC_TARGETS)[number],
@@ -809,7 +806,7 @@ export const AdminNoticeWorkbench: React.FC<AdminNoticeWorkbenchProps> = ({
                   <div className="relative">
                     <select
                       required
-                      value={createNoticeData.issuedBy || 'Training & Placement Officer'}
+                      value={createNoticeData.issuedBy || 'Head Of Department'}
                       onChange={(e) => setCreateNoticeData((prev) => ({ ...prev, issuedBy: e.target.value }))}
                       className="w-full px-3.5 py-2.5 bg-white text-[#1c1b1b] text-sm border border-[#e2e6ec] rounded-lg focus:border-[#003c84] focus:ring-1 focus:ring-[#003c84] focus:outline-none appearance-none cursor-pointer pr-8"
                     >
